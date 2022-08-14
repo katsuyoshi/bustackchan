@@ -1,9 +1,21 @@
-#include <Arduino.h>
+#include <M5Unified.h>
+#include <Avatar.h>
 
-void setup() {
-  // put your setup code here, to run once:
+using namespace m5avatar;
+
+M5GFX display;
+
+Avatar avatar;
+
+void setup()
+{
+  M5.begin();
+  avatar.init(); // start drawing
+  avatar.setRotation(PI);
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
+void loop()
+{
+  // avatar's face updates in another thread
+  // so no need to loop-by-loop rendering
 }
