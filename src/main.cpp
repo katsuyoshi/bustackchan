@@ -26,7 +26,7 @@ void setup()
   cp.set(COLOR_BACKGROUND, TFT_RED);
   cp.set(COLOR_SECONDARY, TFT_BLACK);
   avatar.setColorPalette(cp);
-  avatar.init(8); // start drawing
+  avatar.init(1); // start drawing
 
   if (servo.attach(SERVO_PIN, SERVO_START_DEGREE)) {
     Serial.print("Error attaching servo x");
@@ -44,6 +44,7 @@ void loop()
     moving = !moving;
   }
 
+  /*
   int f = 15;//65;
   int r = 15;//55;
   if (moving) {
@@ -56,4 +57,5 @@ void loop()
     servo.easeTo(SERVO_START_DEGREE, 40); // Blocking call
     delay(1000);
   }
+  */
 }
