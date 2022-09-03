@@ -1,0 +1,42 @@
+#! /usr/bin/env ruby
+
+KANA = <<EOS
+アイウエオ
+カキクケコ
+サシスセソ
+タチツテト
+ナニヌネノ
+ハヒフヘホ
+マミムメモ
+ヤイユエヨ
+ラリルレロ
+ワイウエオ
+ガギグゲゴ
+ザジズゼゾ
+ダヂズデド
+バビブベボ
+ァィゥェォ
+タチッテト
+ャィュェョ
+ン
+EOS
+
+a = KANA.each_line.map{|l| l.chomp.split(//)}.flatten
+b = %w(a k s t n h m y r w g z d b x xt xy).map{|c| %w(a i u e o).map{|v| c == 'a' ? v : c + v}}.flatten
+b << "n;"
+
+a << "、"; b << ","
+a << "'"; b << "'"
+a << "/"; b << "/"
+a << "ー"; b << "-"
+a << "_"; b << "_"
+a << "。"; b << "."
+
+dict = {}
+a.each_with_index{|k, i| dict[k] ||= b[i]}
+#p dict
+
+#s = "ココニ、ヨミアゲ'ル/テ'_キストオ、ニューリョ_クシマ'_ス。"
+s = ARGV[0]
+
+p s.split(//).map{|k| r = dict[k]; r || k}.join("").gsub(/[aiueo]x/, "")
