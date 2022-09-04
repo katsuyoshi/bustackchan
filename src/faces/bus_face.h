@@ -39,10 +39,14 @@ class BusMouth : public Drawable {
     int x = rect.getLeft() - w / 2;
     int y = rect.getTop() - h / 2 + breath * 2;
     spi->fillRect(x, y, w, h, primaryColor);
-    spi->setCursor(x + 4, y + 4);                        // 座標を指定（x, y）
-    spi->setTextSize(2.0);            // 文字倍率変更
-    spi->setTextColor(secondaryColor, primaryColor);
-    spi->println("BUSTACK");                // 表示内容をcanvasに準備
+
+    if (openRatio == 1.0) {
+      spi->setCursor(x + 4, y + 4);                        // 座標を指定（x, y）
+      spi->setTextSize(2.0);            // 文字倍率変更
+      spi->setTextColor(secondaryColor, primaryColor);
+      spi->println("BUSTACK");                // 表示内容をcanvasに準備
+    }
+    Serial.printf("open ratio %f\n", openRatio);
 
     spi->fillRect(10, 10, 300, 100, primaryColor);
     spi->setCursor(15, 15);                        // 座標を指定（x, y）
@@ -136,7 +140,7 @@ class BusFace : public Face {
  public:
   BusFace()
       : Face(
-          new BusMouth(90, 90, 20, 20), new BoundingRect(220, 163),
+          new BusMouth(90, 45, 5, 20), new BoundingRect(220, 163),
            new BusEye(100, 60, 24, false), new BoundingRect(170, 1),
            new BusEye(100, 60, 24, true), new BoundingRect(170, 220),
            new Eyeblow(32, 0, false), new BoundingRect(67, 96),

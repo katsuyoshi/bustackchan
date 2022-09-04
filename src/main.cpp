@@ -2,6 +2,7 @@
 #include <M5Unified.h>
 #include <WiFiMulti.h>
 #include <Avatar.h>
+#include <NeoPixelBus.h>
 //#include <tasks/LipSync.h>
 #include "ServoEasing.hpp"
 #include "faces/bus_face.h"
@@ -11,9 +12,18 @@
 using namespace m5avatar;
 
 //#define SERVO_PIN           5
-#define NEOPIXEL_PIN        
+#define PIXEL_PIN             2
 
 //#define SERVO_START_DEGREE  90
+
+typedef enum led_pattern {
+  LPNone,
+  LPLeft,
+  LPRight,
+  LPStop,
+};
+
+
 
 Avatar avatar;
 //ServoEasing servo;
@@ -34,6 +44,21 @@ volatile bool is_talking = false;
 volatile bool boarding = false;
 int next_time = 0;
 
+static led_pattern led_pat = LPNone;
+
+const uint16_t PixelCount = 15;
+const uint8_t AnimationChannels = 1;
+NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod> strip(PixelCount, PIXEL_PIN);
+
+#define colorSaturation 128
+
+RgbColor red(colorSaturation, 0, 0);
+RgbColor green(0, colorSaturation, 0);
+RgbColor blue(0, 0, colorSaturation);
+RgbColor yellow(colorSaturation, colorSaturation, 0);
+RgbColor orange(colorSaturation, colorSaturation * 165 / 255, 0);
+RgbColor white(colorSaturation);
+RgbColor black(0);
 
 typedef enum phrase_id {
   PHGreeting,
@@ -45,7 +70,9 @@ typedef enum phrase_id {
   PHTugiwa,
 };
 
-static char *phrases[] = {
+static phrase_id speaking_phrase = PHGreeting;
+
+static const char *phrases[] = {
   "do'-mo.ba'_su/ta'xtu_kutyan;de_su.",
   "onorino+katawa/botan;o/o_sitekudasa'i.",
   "oorinokatahabo'tan;o/o_sitekudasa'i.",
@@ -55,7 +82,7 @@ static char *phrases[] = {
   "tugi'wa.",
 };
 
-static char *municipalities[] = {
+static const char *municipalities[] = {
   "higasinarusemura",
   "yuzawa'_si.",
   "ugo'mati",
@@ -84,6 +111,73 @@ static char *municipalities[] = {
 };
 
 
+static void set_left_led() {
+  for (int i = 0; i < PixelCount; i++) {
+    if (i < 6) {
+      strip.SetPixelColor(i, yellow);
+    } else {
+      strip.SetPixelColor(i, black);
+    }
+  }
+  strip.Show();
+}
+
+static void set_right_led() {
+  for (int i = 0; i < PixelCount; i++) {
+    if (i >= 9) {
+      strip.SetPixelColor(i, yellow);
+    } else {
+      strip.SetPixelColor(i, black);
+    }
+  }
+  strip.Show();
+}
+
+static void set_stop_led() {
+  for (int i = 0; i < PixelCount; i++) {
+    if (i >= 6 && i < 9) {
+      strip.SetPixelColor(i, red);
+    } else {
+      strip.SetPixelColor(i, black);
+    }
+  }
+  strip.Show();
+}
+
+static void set_blank_led() {
+  for (int i = 0; i < PixelCount; i++) {
+    strip.SetPixelColor(i, black);
+  }
+  strip.Show();
+}
+
+static void led_task(void*)
+{
+  strip.Begin();
+  while(true) {
+    switch(led_pat) {
+      case LPLeft:
+        set_left_led();
+        vTaskDelay(500);
+        break;
+      case LPRight:
+        set_right_led();
+        vTaskDelay(500);
+        break;
+      case LPStop:
+        set_stop_led();
+        vTaskDelay(500);
+        break;
+      default:
+        set_blank_led();
+        vTaskDelay(500);
+        break;
+    }
+
+    led_pat = led_pattern((led_pat + 1) % 4);
+  }
+}
+
 static void talk_task(void*)
 {
   int16_t wav[3][LEN_FRAME];
@@ -98,6 +192,21 @@ static void talk_task(void*)
       M5.Speaker.playRaw(wav[tri_index], len, 8000, false, 1, m5spk_virtual_channel, false);
       tri_index = tri_index < 2 ? tri_index + 1 : 0;
     }
+  }
+}
+
+static void lip_sync_task(void *args)
+{
+  DriveContext *ctx = reinterpret_cast<DriveContext *> (args);
+  Avatar *avatar = ctx->getAvatar();
+  while(true) {
+    if (is_talking) {
+      float open = random(0,99) / 100.00;
+      avatar->setMouthOpenRatio(open);
+    } else {
+      avatar->setMouthOpenRatio(1.0);
+    }
+    vTaskDelay(5);
   }
 }
 
@@ -128,19 +237,20 @@ static void playAquesTalk(const char *koe)
 }
 
 void speak(phrase_id id) {
+  speaking_phrase = id;
   playAquesTalk(phrases[id]);
 }
 
 void speak_next_station() {
   int i = next_time % 24;
   if (i == 23) {
-    speak(PHGreeting);
+    speak(PHGrooto);
   } else {
     speak(PHTugiwa);
     waitAquesTalk();
     playAquesTalk(municipalities[i]);
     waitAquesTalk();
-    delay(500);
+    vTaskDelay(500);
     speak(PHOriru);
   }
 }
@@ -164,7 +274,7 @@ void syncTime() {
   Serial.print(F("Waiting for NTP time sync: "));
   time_t nowSecs = time(nullptr);
   while (nowSecs < 8 * 3600 * 2) {
-    delay(500);
+    vTaskDelay(500);
     Serial.print(F("."));
     yield();
     nowSecs = time(nullptr);
@@ -189,7 +299,6 @@ time_t now() {
 int interval = 1;
 
 int now_time() {
-//return 0;
   time_t n = now();
   struct tm *t = gmtime(&n);
   return t->tm_hour * (60 / interval)  + t->tm_min / interval;
@@ -208,7 +317,8 @@ void setup()
   M5.begin(cfg);
 
   xTaskCreateUniversal(talk_task, "talk_task", 4096, nullptr, 1, &task_handle, APP_CPU_NUM);
-  M5.Speaker.setVolume(30); //128);
+
+  M5.Speaker.setVolume(64); //128); // 30);
 
   WiFi.disconnect();
   WiFi.softAPdisconnect(true);
@@ -245,7 +355,12 @@ void setup()
     M5.Display.println("ERR:CAqTkPicoF_Init");
   }
 
+  xTaskCreatePinnedToCore(led_task, "led", 2048, NULL, 1, NULL, 1);
+  //xTaskCreatePinnedToCore(lip_sync_task, "lip_sync", 1024, NULL, 1, NULL, 1);
+  avatar.addTask(lip_sync_task, "lipSync");
+
   speak(PHGreeting);
+  waitAquesTalk();
 }
 
 void loop()
