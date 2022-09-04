@@ -126,9 +126,9 @@ typedef enum heading_id {
 };
 
 static const char *heading_titles[] = {
-  "　　　バスタックちゃん　　",
-  "　　　スタック沼行き　　　",
-  "　　　　ぐるっと秋田　　　",
+  "　　バスタックちゃん　　",
+  "　　 スタック沼行き 　　",
+  "　　　ぐるっと秋田　　　",
 };
 
 static heading_id heading_for = HDBustack;
@@ -315,6 +315,7 @@ void speak_next_stop() {
     const char *title = heading_titles[HDBustack];
     BusFace *face = (BusFace *)avatar.getFace();
     face->set_heading_title(title);
+    face->set_stop_requested(stop_requested);
   }
 
   if (boarding) {
@@ -409,7 +410,7 @@ void setup()
   M5.begin(cfg);
 
   SetRandomSeed();
-  
+
   // display MAC address
   uint8_t mac[6];
   esp_efuse_mac_get_default(mac);
@@ -496,6 +497,8 @@ void loop()
   if (boarding) {
     if (M5.BtnA.wasReleased() || M5.BtnC.wasReleased()) {
       stop_requested = true;
+      BusFace *face = (BusFace *)avatar.getFace();
+      face->set_stop_requested(stop_requested);
       speak(PHTugiTomarimasu);
     }
 

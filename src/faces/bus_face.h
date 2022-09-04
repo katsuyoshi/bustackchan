@@ -51,9 +51,17 @@ class BusMouth : public Drawable {
 
     // 窓枠
     spi->fillRect(1, 40, 320 - 2, 120, primaryColor);
+    if (stop_requested) {
+      spi->setCursor(10, 65);
+      spi->setFont(&fonts::lgfxJapanGothic_12);
+      spi->setTextDatum( textdatum_t::top_center      );
+      spi->setTextSize(5.0);
+      spi->setTextColor(secondaryColor, primaryColor);
+      spi->println("とまります");
+    }
 
     // 行き先表示
-    spi->setCursor(0, 4);                        // 座標を指定（x, y）
+    spi->setCursor(18, 4);                        // 座標を指定（x, y）
     spi->setFont(&fonts::lgfxJapanGothic_12);
     spi->setTextDatum( textdatum_t::top_center      );
     spi->setTextSize(2.0);            // 文字倍率変更
@@ -65,8 +73,13 @@ class BusMouth : public Drawable {
     heading_title = title;
   }
 
+  void set_stop_requested(bool flag) {
+    stop_requested = flag;
+  }
+
   private:
-    const char *heading_title = "　　　バスタックちゃん　　";
+    const char *heading_title = "　　バスタックちゃん　　";
+    bool stop_requested = false;
 
 };
 
@@ -161,6 +174,11 @@ class BusFace : public Face {
   void set_heading_title(const char *title) {
     BusMouth *m = (BusMouth *)this->mouth;
     m->set_heading_title(title);
+  }
+
+  void set_stop_requested(bool flag) {
+    BusMouth *m = (BusMouth *)this->mouth;
+    m->set_stop_requested(flag);
   }
 
 };
