@@ -1,5 +1,7 @@
 #! /usr/bin/env ruby
 
+# @see: https://www.a-quest.com/demo/index.html
+
 KANA = <<EOS
 アイウエオ
 カキクケコ
