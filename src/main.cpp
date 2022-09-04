@@ -42,6 +42,7 @@ static TaskHandle_t task_handle = nullptr;
 volatile bool is_talking = false;
 
 volatile bool boarding = false;
+volatile bool stop_requested = false;
 int next_time = 0;
 
 static led_pattern led_pat = LPNone;
@@ -68,6 +69,10 @@ typedef enum phrase_id {
   PHGrooto,
   PHArigato,
   PHTugiwa,
+  PHTugiTomarimasu,
+  PHTomarimasu,
+  PHTrunLeft,
+  PHTrunRight,
 };
 
 static phrase_id speaking_phrase = PHGreeting;
@@ -77,9 +82,13 @@ static const char *phrases[] = {
   "onorino+katawa/botan;o/o_sitekudasa'i.",
   "oorinokatahabo'tan;o/o_sitekudasa'i.",
   "kono/ba'suwa/_suttuku'numa/yu'kide_su.",
-  "kono/ba'suwa/a_kitake'n;naio/syu-kaisuru/guru'ttode_su.",
-  "gozyo-sya/ari'gato-+gozaima'_sita.",
+  "kono/ba'suwa/a_kitake'n;naio/syu-kaisuru/guru'to/a'_kitade_su.",
+  "gozyo-sya/ari'gato-+gozaima'_sita.matano/goriyo-o/oma_ti/siteorima'_su.",
   "tugi'wa.",
+  "tugi'/tomarima'_su.",
+  "tomarima'_su.",
+  "hidarini/magarima'_su.gotyu-ikudasa'i.",
+  "migini/magarima'_su.gotyu-ikudasa'i.",
 };
 
 static const char *municipalities[] = {
@@ -110,11 +119,42 @@ static const char *municipalities[] = {
   "nikaho'si"
 };
 
+typedef enum heading_id {
+  HDBustack,
+  HDStackPond,
+  HDGurutto,
+};
+
+static const char *heading_titles[] = {
+  "　　　バスタックちゃん　　",
+  "　　　スタック沼行き　　　",
+  "　　　　ぐるっと秋田　　　",
+};
+
+static heading_id heading_for = HDBustack;
+
+static void SetRandomSeed()
+{
+    uint32_t seed;
+
+    // random works best with a seed that can use 31 bits
+    // analogRead on a unconnected pin tends toward less than four bits
+    seed = analogRead(0);
+    delay(1);
+
+    for (int shifts = 3; shifts < 31; shifts += 3)
+    {
+        seed ^= analogRead(0) << shifts;
+        delay(1);
+    }
+
+    randomSeed(seed);
+}
 
 static void set_left_led() {
   for (int i = 0; i < PixelCount; i++) {
-    if (i < 6) {
-      strip.SetPixelColor(i, yellow);
+    if (i >= 9) {
+      strip.SetPixelColor(i, orange);
     } else {
       strip.SetPixelColor(i, black);
     }
@@ -124,8 +164,8 @@ static void set_left_led() {
 
 static void set_right_led() {
   for (int i = 0; i < PixelCount; i++) {
-    if (i >= 9) {
-      strip.SetPixelColor(i, yellow);
+    if (i < 6) {
+      strip.SetPixelColor(i, orange);
     } else {
       strip.SetPixelColor(i, black);
     }
@@ -158,23 +198,25 @@ static void led_task(void*)
     switch(led_pat) {
       case LPLeft:
         set_left_led();
-        vTaskDelay(500);
+        vTaskDelay(250);
+        set_blank_led();
+        vTaskDelay(250);
         break;
       case LPRight:
         set_right_led();
-        vTaskDelay(500);
+        vTaskDelay(250);
+        set_blank_led();
+        vTaskDelay(250);
         break;
       case LPStop:
         set_stop_led();
-        vTaskDelay(500);
+        vTaskDelay(100);
         break;
       default:
         set_blank_led();
-        vTaskDelay(500);
+        vTaskDelay(10);
         break;
     }
-
-    led_pat = led_pattern((led_pat + 1) % 4);
   }
 }
 
@@ -241,20 +283,71 @@ void speak(phrase_id id) {
   playAquesTalk(phrases[id]);
 }
 
-void speak_next_station() {
-  int i = next_time % 24;
-  if (i == 23) {
-    speak(PHGrooto);
-  } else {
-    speak(PHTugiwa);
+void speak_next_stop() {
+
+  // 停止ボタンが押されていたら停止アナウンスする
+  if (stop_requested) {
+    switch(random(3)) {
+      case 0:
+        speak(PHTrunLeft);
+        led_pat = LPLeft;
+        vTaskDelay(10000);
+        break;
+      case 1:
+        speak(PHTrunRight);
+        led_pat = LPRight;
+        vTaskDelay(10000);
+        break;
+    }
+    speak(PHTomarimasu);
+    led_pat = LPStop;
     waitAquesTalk();
-    playAquesTalk(municipalities[i]);
+    vTaskDelay(1000);
+
+    speak(PHArigato);
     waitAquesTalk();
-    vTaskDelay(500);
-    speak(PHOriru);
+    vTaskDelay(5000);
+
+    led_pat = LPNone;
+    stop_requested = false;
+    boarding = false;
+
+    const char *title = heading_titles[HDBustack];
+    BusFace *face = (BusFace *)avatar.getFace();
+    face->set_heading_title(title);
+  }
+
+  if (boarding) {
+    int i = next_time % 24;
+    if (i == 23) {
+      speak(PHGrooto);
+    } else {
+      speak(PHTugiwa);
+      waitAquesTalk();
+      playAquesTalk(municipalities[i]);
+      waitAquesTalk();
+      vTaskDelay(500);
+      speak(PHOriru);
+    }
   }
 }
 
+void get_on_for(heading_id id)
+{
+  const char *title = heading_titles[id];
+  BusFace *face = (BusFace *)avatar.getFace();
+  face->set_heading_title(title);
+
+  switch(id) {
+    case HDStackPond:
+      speak(PHSutakuNumaYuki);
+      break;
+    case HDGurutto:
+      speak(PHGrooto);
+      break;
+  }
+  boarding = true;
+}
 
 
 time_t time_synced_at = 0;
@@ -306,7 +399,6 @@ int now_time() {
 
 void update_next_time() {
   next_time = (now_time() + 1) % (24 * 60 / interval);
-  Serial.printf("next_time: %d\n", next_time);
 }
 
 
@@ -315,6 +407,13 @@ void setup()
 {
   auto cfg = M5.config();
   M5.begin(cfg);
+
+  SetRandomSeed();
+  
+  // display MAC address
+  uint8_t mac[6];
+  esp_efuse_mac_get_default(mac);
+  Serial.printf("¥nMAC Address = %02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
   xTaskCreateUniversal(talk_task, "talk_task", 4096, nullptr, 1, &task_handle, APP_CPU_NUM);
 
@@ -365,45 +464,50 @@ void setup()
 
 void loop()
 {
+  // 時刻の取得
   if (time_synced_at == 0) {
     if (wifiMulti.run() == WL_CONNECTED) {
       syncTime();
       update_next_time();
+      speak(PHJousha);
     }
-  } else {
+  }
+  
+  // 予定時刻になったらアナウンスする
+  if (time_synced_at != 0) {
     if (now_time() == next_time) {
       if (boarding) {
-        speak_next_station();
+        // 乗車時は次の停留所
+        speak_next_stop();
       } else {
+        // 未乗車時は乗車の案内
         speak(PHJousha);
       }
       update_next_time();
-    } else {
-      Serial.printf("now_time: %d\n", now_time());
-      delay(1000);
     }
   }
 
 
+
+  // ボタンイベント
   M5.update();
 
+  // 乗車時
   if (boarding) {
-    if (M5.BtnA.wasClicked()) {
-      boarding = !boarding;
-      speak(PHArigato);
-    } else
-    if (M5.BtnC.wasClicked()) {
-      boarding = !boarding;
-      speak(PHArigato);
+    if (M5.BtnA.wasReleased() || M5.BtnC.wasReleased()) {
+      stop_requested = true;
+      speak(PHTugiTomarimasu);
     }
+
+  // 未乗車時
   } else {
-    if (M5.BtnA.wasClicked()) {
-      boarding = !boarding;
-      speak(PHSutakuNumaYuki);
+    if (M5.BtnA.wasReleased()) {
+      // スタック沼行き乗車
+      get_on_for(HDStackPond);
     } else
-    if (M5.BtnC.wasClicked()) {
-      boarding = !boarding;
-      speak(PHGrooto);
+    if (M5.BtnC.wasReleased()) {
+      // ぐるっと秋田乗車
+      get_on_for(HDGurutto);
     }
   }
   if (M5.BtnB.wasReleased()) { speak(PHGreeting); }

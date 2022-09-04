@@ -32,6 +32,7 @@ class BusMouth : public Drawable {
     //uint32_t secondaryColor = ctx->getColorDepth() == 1 ? 1 : ctx->getColorPalette()->get(COLOR_SECONDARY);
     uint32_t primaryColor = ctx->getColorPalette()->get(COLOR_PRIMARY);
     uint32_t secondaryColor = ctx->getColorPalette()->get(COLOR_SECONDARY);
+    uint32_t backgroundColor = ctx->getColorPalette()->get(COLOR_BACKGROUND);
     float breath = _min(1.0f, ctx->getBreath());
     float openRatio = ctx->getMouthOpenRatio();
     int h = minHeight + (maxHeight - minHeight) * openRatio;
@@ -46,16 +47,27 @@ class BusMouth : public Drawable {
       spi->setTextColor(secondaryColor, primaryColor);
       spi->println("BUSTACK");                // 表示内容をcanvasに準備
     }
-    Serial.printf("open ratio %f\n", openRatio);
 
-    spi->fillRect(10, 10, 300, 100, primaryColor);
-    spi->setCursor(15, 15);                        // 座標を指定（x, y）
+
+    // 窓枠
+    spi->fillRect(1, 40, 320 - 2, 120, primaryColor);
+
+    // 行き先表示
+    spi->setCursor(0, 4);                        // 座標を指定（x, y）
     spi->setFont(&fonts::lgfxJapanGothic_12);
     spi->setTextDatum( textdatum_t::top_center      );
     spi->setTextSize(2.0);            // 文字倍率変更
-    spi->setTextColor(secondaryColor, primaryColor);
-    spi->println("スタック沼");                // 表示内容をcanvasに準備
+    spi->setTextColor(primaryColor, backgroundColor);
+    spi->println(heading_title);                // 表示内容をcanvasに準備
   }
+
+  void set_heading_title(const char *title) {
+    heading_title = title;
+  }
+
+  private:
+    const char *heading_title = "　　　バスタックちゃん　　";
+
 };
 
 class BusEye : public Drawable {
@@ -145,6 +157,11 @@ class BusFace : public Face {
            new BusEye(100, 60, 24, true), new BoundingRect(170, 220),
            new Eyeblow(32, 0, false), new BoundingRect(67, 96),
            new Eyeblow(32, 0, true), new BoundingRect(72, 230)) {}
+
+  void set_heading_title(const char *title) {
+    BusMouth *m = (BusMouth *)this->mouth;
+    m->set_heading_title(title);
+  }
 
 };
 
