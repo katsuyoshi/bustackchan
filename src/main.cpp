@@ -47,6 +47,10 @@ int next_time = 0;
 
 static led_pattern led_pat = LPNone;
 
+static int volume = 127;
+static bool vol_up = true;
+static bool vol_changing = false;
+
 const uint16_t PixelCount = 15;
 const uint8_t AnimationChannels = 1;
 NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod> strip(PixelCount, PIXEL_PIN);
@@ -80,8 +84,8 @@ static phrase_id speaking_phrase = PHGreeting;
 static const char *phrases[] = {
   "do'-mo.ba'_su/ta'xtu_kutyan;de_su.",
   "onorino+katawa/botan;o/o_sitekudasa'i.",
-  "oorinokatahabo'tan;o/o_sitekudasa'i.",
-  "kono/ba'suwa/_suttuku'numa/yu'kide_su.",
+  "oorinokatawa/bo'tan;o/o_sitekudasa'i.",
+  "kono/ba'suwa/_sutakku'numa/yu'kide_su.",
   "kono/ba'suwa/a_kitake'n;naio/syu-kaisuru/guru'to/a'_kitade_su.",
   "gozyo-sya/ari'gato-+gozaima'_sita.matano/goriyo-o/oma_ti/siteorima'_su.",
   "tugi'wa.",
@@ -140,12 +144,12 @@ static void SetRandomSeed()
     // random works best with a seed that can use 31 bits
     // analogRead on a unconnected pin tends toward less than four bits
     seed = analogRead(0);
-    delay(1);
+    vTaskDelay(1);
 
     for (int shifts = 3; shifts < 31; shifts += 3)
     {
         seed ^= analogRead(0) << shifts;
-        delay(1);
+        vTaskDelay(1);
     }
 
     randomSeed(seed);
@@ -418,7 +422,7 @@ void setup()
 
   xTaskCreateUniversal(talk_task, "talk_task", 4096, nullptr, 1, &task_handle, APP_CPU_NUM);
 
-  M5.Speaker.setVolume(64); //128); // 30);
+  M5.Speaker.setVolume(volume);
 
   WiFi.disconnect();
   WiFi.softAPdisconnect(true);
@@ -430,7 +434,7 @@ void setup()
   // If you have more points, repeat the above three lines like WIFI_SSID3, 4, 5 ...
 
   //while (wifiMulti.run() != WL_CONNECTED) {
-  //  delay(250);
+  //  vTaskDelay(250);
   //  Serial.print(".");
   //  M5.Lcd.print(".");
   //}
@@ -448,16 +452,18 @@ void setup()
   //  Serial.print("Error attaching servo x");
   //}
 
-  delay(500);
 
   int iret = CAqTkPicoF_Init(workbuf, LEN_FRAME, AQUESTALK_KEY);
   if (iret) {
     M5.Display.println("ERR:CAqTkPicoF_Init");
   }
 
-  xTaskCreatePinnedToCore(led_task, "led", 2048, NULL, 1, NULL, 1);
-  //xTaskCreatePinnedToCore(lip_sync_task, "lip_sync", 1024, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(led_task, "led", 2048, NULL, 1, NULL, APP_CPU_NUM);
+  //xTaskCreatePinnedToCore(lip_sync_task, "lip_sync", 1024, NULL, 1, NULL, APP_CPU_NUM);
   avatar.addTask(lip_sync_task, "lipSync");
+
+
+  vTaskDelay(5000);
 
   speak(PHGreeting);
   waitAquesTalk();
@@ -513,5 +519,21 @@ void loop()
       get_on_for(HDGurutto);
     }
   }
-  if (M5.BtnB.wasReleased()) { speak(PHGreeting); }
+  if (M5.BtnB.isHolding()) {
+    vol_changing = true;
+    if (vol_up) {
+      volume = min(127, volume + 1);
+    } else {
+      volume = max(0, volume - 1);
+    }
+    M5.Speaker.setVolume(volume);
+    vTaskDelay(10);
+  }
+  if (M5.BtnB.wasReleased()) {
+    vol_changing = false;
+    vol_up = !vol_up;
+    // speak(PHGreeting); 
+  }
+
+  vTaskDelay(10);
 }
