@@ -28,8 +28,6 @@ class BusMouth : public Drawable {
         maxHeight{maxHeight} {}
 
   void draw(M5Canvas *spi, BoundingRect rect, DrawContext *ctx) {
-    //uint32_t primaryColor = ctx->getColorDepth() == 1 ? 1 : ctx->getColorPalette()->get(COLOR_PRIMARY);
-    //uint32_t secondaryColor = ctx->getColorDepth() == 1 ? 1 : ctx->getColorPalette()->get(COLOR_SECONDARY);
     uint32_t primaryColor = ctx->getColorPalette()->get(COLOR_PRIMARY);
     uint32_t secondaryColor = ctx->getColorPalette()->get(COLOR_SECONDARY);
     uint32_t backgroundColor = ctx->getColorPalette()->get(COLOR_BACKGROUND);
@@ -42,10 +40,10 @@ class BusMouth : public Drawable {
     spi->fillRect(x, y, w, h, primaryColor);
 
     if (openRatio == 1.0) {
-      spi->setCursor(x + 4, y + 4);                        // 座標を指定（x, y）
-      spi->setTextSize(2.0);            // 文字倍率変更
+      spi->setCursor(x + 4, y + 4);                             // 座標を指定（x, y）
+      spi->setTextSize(2.0);          // 文字倍率変更
       spi->setTextColor(secondaryColor, primaryColor);
-      spi->println("BUSTACK");                // 表示内容をcanvasに準備
+      spi->println("BUSTACK");        // 表示内容をcanvasに準備
     }
 
 
@@ -109,7 +107,6 @@ class BusEye : public Drawable {
     int y = rect.getTop();
     int w = rect.getWidth();
     int h = rect.getHeight();
-    //spi->fillRect(x, y, w, h, primaryColor);
     spi->drawRect(x, y, w, h, primaryColor);
 
     {
