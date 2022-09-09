@@ -3,68 +3,34 @@
 #include <WiFiMulti.h>
 #include <Avatar.h>
 #include <NeoPixelBus.h>
-//#include <tasks/LipSync.h>
 #include "ServoEasing.hpp"
 #include "faces/bus_face.h"
 #include <aquestalk.h>
-#include "Env.h"
+#include "env.h"
 
 using namespace m5avatar;
+
+//******************************
+// defines
 
 //#define SERVO_PIN           5
 #define PIXEL_PIN             2
 
 //#define SERVO_START_DEGREE  90
 
-typedef enum led_pattern {
+#define colorSaturation 128
+
+
+// LEDの点滅パターン
+typedef enum led_pattern_id
+ {
   LPNone,
   LPLeft,
   LPRight,
   LPStop,
 };
 
-
-
-Avatar avatar;
-//ServoEasing servo;
-ColorPalette cp;
-WiFiMulti wifiMulti;
-
-double pi = atan(1.0) * 4.0;
-
-/// set M5Speaker virtual channel (0-7)
-static constexpr uint8_t m5spk_virtual_channel = 0;
-
-static constexpr uint8_t LEN_FRAME = 32;
-
-static uint32_t workbuf[AQ_SIZE_WORKBUF];
-static TaskHandle_t task_handle = nullptr;
-volatile bool is_talking = false;
-
-volatile bool boarding = false;
-volatile bool stop_requested = false;
-int next_time = 0;
-
-static led_pattern led_pat = LPNone;
-
-static int volume = 127;
-static bool vol_up = true;
-static bool vol_changing = false;
-
-const uint16_t PixelCount = 15;
-const uint8_t AnimationChannels = 1;
-NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod> strip(PixelCount, PIXEL_PIN);
-
-#define colorSaturation 128
-
-RgbColor red(colorSaturation, 0, 0);
-RgbColor green(0, colorSaturation, 0);
-RgbColor blue(0, 0, colorSaturation);
-RgbColor yellow(colorSaturation, colorSaturation, 0);
-RgbColor orange(colorSaturation, colorSaturation * 165 / 255, 0);
-RgbColor white(colorSaturation);
-RgbColor black(0);
-
+// AquesTalkのフレーズ
 typedef enum phrase_id {
   PHGreeting,
   PHJousha,
@@ -79,10 +45,59 @@ typedef enum phrase_id {
   PHTrunRight,
 };
 
+// 行き先表示
+typedef enum heading_id {
+  HDBustack,
+  HDStackPond,
+  HDGurutto,
+};
+
+
+
+//******************************
+// Variables
+
+// for avator
+static Avatar avatar;
+//static ServoEasing servo;
+static ColorPalette cp;
+
+// for WiFi
+static WiFiMulti wifiMulti;
+
+
+static double pi = atan(1.0) * 4.0;
+
+// for AquesTalk
+/// set M5Speaker virtual channel (0-7)
+static constexpr uint8_t m5spk_virtual_channel = 0;
+static constexpr uint8_t LEN_FRAME = 32;
+static uint32_t workbuf[AQ_SIZE_WORKBUF];
+static TaskHandle_t task_handle = nullptr;
+volatile bool is_talking = false;
+
+static int volume = 127;
+static bool vol_up = true;
+static bool vol_changing = false;
+
 static phrase_id speaking_phrase = PHGreeting;
 
+// @see: https://www.a-quest.com/demo/index.html
+// 上記サイトで規則音声合成テキストを生成する。
+// utilsのkana2romajiでローマ字に変換する。
+//
+// 例)
+// 「どーも、バスタックちゃんです。」
+//    |
+//    V Convert
+// 「ド'ーモ、バ'_ス/タ'ッ_クチャンデ_ス。」
+//
+// % ./kana2romaji "ド'ーモ、バ'_ス/タ'ッ_クチャンデ_ス。"
+// #=> "do'-mo,ba'_su/ta'_kutyan;de_su."
+//
+
 static const char *phrases[] = {
-  "do'-mo.ba'_su/ta'xtu_kutyan;de_su.",
+  "do'-mo,ba'_su/ta'_kutyan;de_su.",
   "onorino+katawa/botan;o/o_sitekudasa'i.",
   "oorinokatawa/bo'tan;o/o_sitekudasa'i.",
   "kono/ba'suwa/_sutakku'numa/yu'kide_su.",
@@ -123,11 +138,13 @@ static const char *municipalities[] = {
   "nikaho'si"
 };
 
-typedef enum heading_id {
-  HDBustack,
-  HDStackPond,
-  HDGurutto,
-};
+
+// for BUSTACK
+volatile bool boarding = false;
+volatile bool stop_requested = false;
+static int next_time = 0;
+
+static heading_id heading_for = HDBustack;
 
 static const char *heading_titles[] = {
   "　　バスタックちゃん　　",
@@ -135,7 +152,38 @@ static const char *heading_titles[] = {
   "　　　ぐるっと秋田　　　",
 };
 
-static heading_id heading_for = HDBustack;
+int interval_between_stops = 1;
+
+
+// for LEDs
+static led_pattern_id
+ led_pat = LPNone;
+const uint16_t PixelCount = 15;
+const uint8_t AnimationChannels = 1;
+NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod> strip(PixelCount, PIXEL_PIN);
+
+RgbColor red(colorSaturation, 0, 0);
+RgbColor green(0, colorSaturation, 0);
+RgbColor blue(0, 0, colorSaturation);
+RgbColor yellow(colorSaturation, colorSaturation, 0);
+RgbColor orange(colorSaturation, colorSaturation * 165 / 255, 0);
+RgbColor white(colorSaturation);
+RgbColor black(0);
+
+
+// for NTP sync
+
+time_t time_synced_at = 0;
+uint32_t millis_since_time_synced;
+
+const char* ntpServer = "ntp.nict.jp";
+const long  gmtOffset_sec = 3600 * 9;
+const int   daylightOffset_sec = 0;
+
+
+
+//******************************
+// functions
 
 static void SetRandomSeed()
 {
@@ -155,6 +203,8 @@ static void SetRandomSeed()
     randomSeed(seed);
 }
 
+
+// for LEDs
 static void set_left_led() {
   for (int i = 0; i < PixelCount; i++) {
     if (i >= 9) {
@@ -223,6 +273,10 @@ static void led_task(void*)
     }
   }
 }
+
+
+
+// for AquesTalk
 
 static void talk_task(void*)
 {
@@ -337,6 +391,9 @@ void speak_next_stop() {
   }
 }
 
+
+// 乗車時処理
+
 void get_on_for(heading_id id)
 {
   const char *title = heading_titles[id];
@@ -355,16 +412,9 @@ void get_on_for(heading_id id)
 }
 
 
-time_t time_synced_at = 0;
-uint32_t millis_since_time_synced;
 
-const char* ntpServer = "ntp.nict.jp";
-const long  gmtOffset_sec = 3600 * 9;
-const int   daylightOffset_sec = 0;
+// for time management
 
-
-// Not sure if WiFiClientSecure checks the validity date of the certificate. 
-// Setting clock just to be sure...
 void syncTime() {
   configTime(0, 0, "pool.ntp.org");
   //configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
@@ -394,19 +444,20 @@ time_t now() {
   return n;
 }
 
-int interval = 1;
 
 int now_time() {
   time_t n = now();
   struct tm *t = gmtime(&n);
-  return t->tm_hour * (60 / interval)  + t->tm_min / interval;
+  return t->tm_hour * (60 / interval_between_stops)  + t->tm_min / interval_between_stops;
 }
 
 void update_next_time() {
-  next_time = (now_time() + 1) % (24 * 60 / interval);
+  next_time = (now_time() + 1) % (24 * 60 / interval_between_stops);
 }
 
 
+
+// setup
 
 void setup()
 {
@@ -433,12 +484,6 @@ void setup()
 #endif
   // If you have more points, repeat the above three lines like WIFI_SSID3, 4, 5 ...
 
-  //while (wifiMulti.run() != WL_CONNECTED) {
-  //  vTaskDelay(250);
-  //  Serial.print(".");
-  //  M5.Lcd.print(".");
-  //}
-
   avatar.setRotation(pi);
   avatar.setFace(new BusFace());
   cp.set(COLOR_PRIMARY, TFT_WHITE);
@@ -446,7 +491,6 @@ void setup()
   cp.set(COLOR_SECONDARY, TFT_BLACK);
   avatar.setColorPalette(cp);
   avatar.init(1); // start drawing
-  //avatar.addTask(lipSync, "lipSync");
 
   //if (servo.attach(SERVO_PIN, SERVO_START_DEGREE)) {
   //  Serial.print("Error attaching servo x");
@@ -459,7 +503,6 @@ void setup()
   }
 
   xTaskCreatePinnedToCore(led_task, "led", 2048, NULL, 1, NULL, APP_CPU_NUM);
-  //xTaskCreatePinnedToCore(lip_sync_task, "lip_sync", 1024, NULL, 1, NULL, APP_CPU_NUM);
   avatar.addTask(lip_sync_task, "lipSync");
 
 
@@ -468,6 +511,8 @@ void setup()
   speak(PHGreeting);
   waitAquesTalk();
 }
+
+// loop
 
 void loop()
 {
@@ -532,7 +577,6 @@ void loop()
   if (M5.BtnB.wasReleased()) {
     vol_changing = false;
     vol_up = !vol_up;
-    // speak(PHGreeting); 
   }
 
   vTaskDelay(10);
