@@ -28,11 +28,11 @@ https://protopedia.net/prototype/3251
 - 3Dプリンターでボディ、ヘッド、窓、シャーシ、タイヤを印刷します。
   |パーツ|備考|
   |:--|:--|
-  |[ボディ](/blob/main/models/body%20v19.gcode)|加工が必要です。|
-  |[ヘッド](/blob/main/models/head%20v4.gcode)||
-  |[窓](/blob/main/models/window%20v2.gcode)|左右と後部の3つが組みになっています。|
-  |[シャーシ](/blob/main/models/chassis3%20v6.gcode)||
-  |[タイヤ](/blob/main/models/tire%20v3.gcode)|4本組みになってます。|
+  |[ボディ](models/body%20v19.gcode)|加工が必要です。|
+  |[ヘッド](models/head%20v4.gcode)||
+  |[窓](models/window%20v2.gcode)|左右と後部の3つが組みになっています。|
+  |[シャーシ](models/chassis3%20v6.gcode)||
+  |[タイヤ](models/tire%20v3.gcode)|4本組みになってます。|
 
 
 - ポディでM5StackのUSB-Cコネクターと電源ボタンの部分が塞がれているので、[発泡スチロールカッター](https://getnavi.jp/zakka/464317/)などでコネクターが差し込みできる様にボディにスリットを入れます。(*1)
